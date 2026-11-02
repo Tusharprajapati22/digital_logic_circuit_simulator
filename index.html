@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Digital Logic Circuit Simulator</title>
+<style>
+/* ===== THEME (CSS variables on :root) ===== */
+:root{--bg:#0f1420;--panel:#171e2e;--fg:#e6ebf5;--muted:#8a94a8;--line:#2c3650;--accent:#5b8cff;--hi:#ff9f1c;--lo:#3a86ff;--wire:#7d8aa6;--led:#2ecc71;--err:#ff4d5e;--grid:#26304a}
+[data-theme=light]{--bg:#f3f5fa;--panel:#fff;--fg:#1b2233;--muted:#5d6780;--line:#d5dbe8;--accent:#2f6df6;--wire:#5d6780;--grid:#d6dded}
+*{box-sizing:border-box}
+body{margin:0;height:100vh;display:grid;grid-template-rows:auto 1fr auto;font:14px system-ui,sans-serif;background:var(--bg);color:var(--fg)}
+header,footer{display:flex;align-items:center;gap:6px;padding:6px 10px;background:var(--panel);flex-wrap:wrap}
+header{border-bottom:1px solid var(--line)}
+footer{border-top:1px solid var(--line);font-size:12px;color:var(--muted);gap:16px}
+main{display:grid;grid-template-columns:200px 1fr 300px;min-height:0}
+aside{background:var(--panel);overflow:auto;padding:8px;min-height:0}
+#canvas{width:100%;height:100%;display:block;touch-action:none;outline:none;user-select:none;background:var(--bg) radial-gradient(var(--grid) 1.2px,transparent 1.5px) 0 0/20px 20px}
+button,select,input{font:inherit;color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:5px 9px;min-height:32px;cursor:pointer}
+button:hover{border-color:var(--accent)}
+h3{margin:12px 0 6px;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.pal{display:flex;align-items:center;gap:8px;width:100%;min-height:44px;margin:3px 0;text-align:left}
+.pal svg{width:64px;height:36px;flex:none}
+.tabs{display:flex;gap:4px;margin-bottom:8px}.tabs button.on{background:var(--accent);color:#fff}
+.tab[hidden]{display:none}
+table{border-collapse:collapse;width:100%;font:13px ui-monospace,Menlo,monospace}
+td,th{border:1px solid var(--line);padding:3px 6px;text-align:center}
+tr.cur td{background:color-mix(in srgb,var(--accent) 30%,transparent)}
+tr.bad td{background:#ff4d5e55}
+tr[data-r]{cursor:pointer}
+td input{width:70px;min-height:26px;padding:2px 4px;font:12px ui-monospace,monospace}
+.expr{font:14px ui-monospace,Menlo,monospace;margin:6px 0;word-break:break-all}
+.mono{font-family:ui-monospace,Menlo,monospace}
+.muted{color:var(--muted)}
+/* ===== SVG COMPONENT STYLES ===== */
+.comp{color:var(--fg)}
+.comp *{stroke:currentColor;fill:none;stroke-width:2}
+.comp .hit{fill:#000;fill-opacity:0;stroke:none}
+.comp .bub{fill:var(--bg)}
+.comp .hitp{fill:#000;fill-opacity:0;stroke:none}
+.comp .pin{fill:var(--wire);stroke:none}
+.comp text{fill:currentColor;stroke:none;font:11px ui-monospace,monospace}
+.comp.sel{color:var(--accent);filter:drop-shadow(0 0 3px var(--accent))}
+.comp.warn{color:var(--err)}
+.wire{fill:none;stroke-width:2.5}.selw{stroke-width:5}
+.whit{fill:none;stroke:transparent;stroke-width:12}
+.box{fill:var(--accent);fill-opacity:.15;stroke:var(--accent);stroke-dasharray:4}
+.mbar{display:none}
+@media (max-width:768px){
+ header{position:sticky;top:0;z-index:6}
+ header>*:not(b):not(#preset):not(#undo):not(#redo):not(#fit):not(#theme){display:none}
+ footer{display:none}
+ main{grid-template-columns:1fr;grid-template-rows:1fr;padding-bottom:58px;min-height:0}
+ #left,#right{display:none;position:fixed;left:0;right:0;bottom:58px;max-height:60vh;z-index:5;border-top:2px solid var(--accent);border-radius:14px 14px 0 0;box-shadow:0 -8px 24px #0008}
+ #left.open,#right.open{display:block}
+ #gates{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+ #io{display:grid;grid-template-columns:repeat(2,1fr);gap:6px}
+ .pal{flex-direction:column;justify-content:center;text-align:center;font-size:12px;min-height:64px;margin:0}
+ .pal svg{width:56px;height:32px}
+ .tabs button{flex:1;min-height:44px}
+ button{min-height:44px}
+ .mbar{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:7;gap:6px;padding:8px;background:var(--panel);border-top:1px solid var(--line)}
+ .mbar button{flex:1;min-height:44px;font-size:14px;padding:4px}
+ .mbar button.on{background:var(--accent);color:#fff}
+ #mDel{color:var(--err)}
+}
+</style>
+</head>
+<body>
+<header>
+  <b>⚡ Logic Sim</b>
+  <select id="preset"><option value="">Presets…</option><option value="HA">Half Adder</option><option value="FA">Full Adder</option><option value="XNAND">XOR from NAND</option><option value="NOTNAND">NOT from NAND</option><option value="AND">AND</option><option value="OR">OR</option><option value="NOT">NOT</option><option value="NAND">NAND</option><option value="NOR">NOR</option><option value="XOR">XOR</option><option value="XNOR">XNOR</option><option value="DM1">De Morgan 1st Theorem</option><option value="DM2">De Morgan 2nd Theorem</option></select>
+  <button id="undo">Undo</button><button id="redo">Redo</button>
+  <button id="save">Save</button><button id="load">Load</button>
+  <button id="exp">Export</button><button id="imp">Import</button><input type="file" id="file" accept=".json" hidden>
+  <button id="delBtn">🗑 Delete</button><button id="zin">+</button><button id="zout">−</button><button id="fit">Fit</button>
+  <label>Delay <input id="delay" type="range" min="0.5" max="5" step="0.5" value="1"> <span id="dv" class="mono">1 ns</span></label>
+  <button id="theme">Theme</button>
+</header>
+<main>
+  <aside id="left"><h3>Gates</h3><div id="gates"></div><h3>Inputs / Outputs</h3><div id="io"></div><h3>Modules</h3><p class="muted">Arithmetic modules and ALU: not in this build.</p></aside>
+  <svg id="canvas" tabindex="0"></svg>
+  <aside id="right">
+    <div class="tabs"><button class="on" data-tab="expr">Expression</button><button data-tab="tt">Truth Table</button><button data-tab="info">Info</button></div>
+    <div id="expr" class="tab"></div><div id="tt" class="tab" hidden></div><div id="info" class="tab" hidden></div>
+  </aside>
+</main>
+<div class="mbar"><button id="mGates">＋ Gates</button><button id="mSel">☐ Select</button><button id="mDel">🗑 Delete</button><button id="mPanel">Info</button></div>
+<footer><span id="status"></span><span id="warn" style="color:var(--err)"></span><span id="counts"></span></footer>
+
+<script>
+/* ===== 1. GATE LOGIC =====
+   Pure boolean functions. Inverting gates (NAND, NOR, XNOR, NOT) are their base
+   function followed by an inversion. Multi-input gates reduce over all inputs. */
+const $=id=>document.getElementById(id);
+const INV=t=>['NAND','NOR','XNOR','NOT'].includes(t);
+const BASE={NAND:'AND',NOR:'OR',XNOR:'XOR',NOT:'BUF'};
+function gateFn(t,ins){const b=BASE[t]||t;
+  const r=b==='AND'?ins.reduce((a,x)=>a&x,1):b==='OR'?ins.reduce((a,x)=>a|x,0):b==='XOR'?ins.reduce((a,x)=>a^x,0):ins[0];
+  return INV(t)?1^r:r;}
+
+/* ===== 2. MODEL: Gate, Pin, Wire, Circuit ===== */
+class Pin{constructor(g,key,x,y){Object.assign(this,{g,key,x,y})} get pos(){return this.g.world(this.x,this.y)}}
+class Gate{
+  constructor(o){Object.assign(this,{id:0,type:'AND',n:2,x:0,y:0,rot:0,val:0,d:1},o);if(this.type==='NOT')this.n=1}
+  get nIn(){return this.type==='SW'?0:(this.type==='LED'||this.type==='NOT')?1:this.n}
+  get label(){return this.type==='SW'||this.type==='LED'||this.type==='NOT'?this.type:this.type+this.n}
+  geom(){const t=this.type,n=this.nIn,H=t==='NOT'?28:Math.max(40,n*16+8),r=H/2,isAnd=t==='AND'||t==='NAND',inv=INV(t),right=isAnd?r:18;
+    return{H,r,isAnd,inv,right,ox:right+(inv?8:0)+12,ys:Array.from({length:n},(_,i)=>-H/2+(i+.5)*H/n)};}
+  pins(){const g=this.geom(),P=(k,x,y)=>new Pin(this,k,x,y);
+    if(this.type==='SW')return{ins:[],out:P('o',28,0)};
+    if(this.type==='LED')return{ins:[P('i0',-28,0)],out:null};
+    return{ins:g.ys.map((y,i)=>P('i'+i,-30,y)),out:P('o',g.ox,0)};}
+  world(x,y){let a=x,b=y;for(let i=0;i<this.rot;i++){[a,b]=[-b,a]}return{x:this.x+a,y:this.y+b}}
+}
+class Wire{constructor(a,b,bi){this.a=a;this.b=b;this.bi=bi} get key(){return this.b+':'+this.bi}}
+class Circuit{
+  constructor(){this.comps=[];this.wires=[]}
+  byId(id){return this.comps.find(c=>c.id===id)}
+  newId(){return Math.max(0,...this.comps.map(c=>c.id))+1}
+  sources(){const m={};this.comps.forEach(c=>m[c.id]=Array(c.nIn).fill(null));this.wires.forEach(w=>{if(m[w.b])m[w.b][w.bi]=w.a});return m}
+  toJSON(){return{comps:this.comps,wires:this.wires}}
+  static from(o){const C=new Circuit();C.comps=o.comps.map(x=>new Gate(x));C.wires=o.wires.map(w=>new Wire(w.a,w.b,w.bi));return C}
+}
+
+/* ===== 3. SYMBOLS (ANSI/IEEE style, bubbles on inverting gates) ===== */
+function symSVG(t,n){const g=new Gate({type:t,n}).geom();
+  let b=t==='NOT'?'<path d="M-18,-14L18,0L-18,14Z"/>'
+    :g.isAnd?`<path d="M-18,${-g.r}H0A${g.r},${g.r} 0 0 1 0,${g.r}H-18Z"/>`
+    :`<path d="M-18,${-g.r}Q8,${-g.r} 18,0Q8,${g.r} -18,${g.r}Q-8,0 -18,${-g.r}Z"/>`;
+  if(t==='XOR'||t==='XNOR')b+=`<path d="M-24,${-g.r}Q-16,0 -24,${g.r}"/>`;
+  if(g.inv)b+=`<circle class="bub" cx="${g.right+4}" cy="0" r="4"/>`;
+  return b+g.ys.map(y=>`<path d="M-30,${y}H-18"/>`).join('')+`<path d="M${g.right+(g.inv?8:0)},0H${g.ox}"/>`;}
+
+/* ===== 4. SIMULATION ENGINE: netlist + Kahn topological sort =====
+   Cycles never leave the queue; every unprocessed component is flagged as loop-affected. */
+class Simulator{
+  run(C,ov={}){const m=C.sources(),indeg={},adj={},val={},at={},disc=new Set();
+    C.comps.forEach(c=>{indeg[c.id]=m[c.id].filter(s=>s!==null).length;adj[c.id]=[]});
+    C.comps.forEach(c=>m[c.id].forEach(s=>{if(s!==null&&adj[s])adj[s].push(c.id)}));
+    const q=C.comps.filter(c=>!indeg[c.id]).map(c=>c.id);
+    while(q.length){const id=q.shift(),c=C.byId(id),src=m[id];
+      if(src.includes(null))disc.add(id);
+      const ta=src.reduce((mx,s)=>s===null?mx:Math.max(mx,at[s]),0), iv=src.map(s=>s===null?0:val[s]);
+      if(c.type==='SW'){val[id]=ov[id]!==undefined?ov[id]:c.val;at[id]=0}
+      else if(c.type==='LED'){val[id]=iv[0];at[id]=ta}
+      else{val[id]=gateFn(c.type,iv);at[id]=ta+c.d}
+      adj[id].forEach(nb=>{if(--indeg[nb]===0)q.push(nb)});}
+    const cyc=new Set(C.comps.filter(c=>!(c.id in val)).map(c=>c.id));
+    const crit=Math.max(0,...C.comps.filter(c=>c.type==='LED').map(c=>at[c.id]||0));
+    return{val,at,cyc,disc,crit};}
+}
+
+/* ===== 5. EXPRESSION BUILDER: backward traversal from each LED ===== */
+class ExpressionBuilder{
+  constructor(C){this.C=C;this.m=C.sources();this.names={};
+    C.comps.filter(c=>c.type==='SW').sort((a,b)=>a.id-b.id).forEach((c,i)=>this.names[c.id]=String.fromCharCode(65+i));}
+  of(id,seen=new Set()){const c=this.C.byId(id);
+    if(seen.has(id))return{s:'loop',p:true};
+    if(c.type==='SW')return{s:this.names[id],p:true};
+    const S=new Set([...seen,id]);
+    const ins=this.m[id].map(s=>s===null?{s:'?',p:true}:this.of(s,S));
+    if(c.type==='LED')return ins[0];
+    const w=e=>e.p?e.s:'('+e.s+')';
+    if(c.type==='NOT')return{s:w(ins[0])+"'",p:true};
+    const sep={AND:'·',NAND:'·',OR:' + ',NOR:' + ',XOR:' ⊕ ',XNOR:' ⊕ '}[c.type];
+    const inner=ins.map(w).join(sep);
+    return INV(c.type)?{s:`(${inner})'`,p:true}:{s:inner,p:false};}
+}
+
+/* ===== 6. TRUTH TABLE (up to 4 inputs) ===== */
+class TruthTable{
+  constructor(C){this.C=C;this.ins=C.comps.filter(c=>c.type==='SW').sort((a,b)=>a.id-b.id);
+    this.outs=C.comps.filter(c=>c.type==='LED').sort((a,b)=>a.id-b.id);}
+  rows(){const n=this.ins.length,sim=new Simulator(),out=[];
+    for(let r=0;r<(1<<n);r++){const bits=this.ins.map((_,k)=>(r>>(n-1-k))&1),ov={};
+      this.ins.forEach((c,k)=>ov[c.id]=bits[k]);const s=sim.run(this.C,ov);
+      out.push({bits,outs:this.outs.map(o=>s.val[o.id]||0)});}
+    return out;}
+}
+
+/* ===== 7. COMMAND STACK (undo/redo of full-state snapshots) ===== */
+class CommandStack{
+  constructor(){this.u=[];this.r=[]}
+  exec(snap){this.u.push(snap);this.r=[]}
+  undo(){if(!this.u.length)return null;this.r.push(serial());return this.u.pop()}
+  redo(){if(!this.r.length)return null;this.u.push(serial());return this.r.pop()}
+}
+
+/* ===== 8. EVENT BUS (publish/subscribe) ===== */
+const bus={h:{},on(e,f){(this.h[e]=this.h[e]||[]).push(f)},emit(e){(this.h[e]||[]).forEach(f=>f())}};
+
+/* ===== 9. STATE & PRESETS ===== */
+const PRESETS={
+  HA:{c:[[1,'SW',0,-200,-40],[2,'SW',0,-200,60],[3,'XOR',2,-40,-40],[4,'AND',2,-40,60],[5,'LED',0,160,-40],[6,'LED',0,160,60]],
+      w:[[1,3,0],[2,3,1],[1,4,0],[2,4,1],[3,5,0],[4,6,0]]},
+  FA:{c:[[1,'SW',0,-260,-120],[2,'SW',0,-260,-20],[3,'SW',0,-260,80],[4,'XOR',2,-140,-60],[5,'XOR',2,-20,-40],[6,'AND',2,-140,40],[7,'AND',2,-20,140],[8,'OR',2,100,80],[9,'LED',0,180,-40],[10,'LED',0,180,80]],
+      w:[[1,4,0],[2,4,1],[4,5,0],[3,5,1],[1,6,0],[2,6,1],[4,7,0],[3,7,1],[6,8,0],[7,8,1],[5,9,0],[8,10,0]]},
+  XNAND:{c:[[1,'SW',0,-200,-40],[2,'SW',0,-200,60],[3,'NAND',2,-100,0],[4,'NAND',2,-20,-60],[5,'NAND',2,-20,60],[6,'NAND',2,60,0],[7,'LED',0,160,0]],
+      w:[[1,3,0],[2,3,1],[1,4,0],[3,4,1],[2,5,0],[3,5,1],[4,6,0],[5,6,1],[6,7,0]]},
+  NOTNAND:{c:[[1,'SW',0,-160,0],[2,'NAND',2,-40,0],[3,'LED',0,80,0]],w:[[1,2,0],[1,2,1],[2,3,0]]},
+  AND:{c:[[1,'SW',0,-200,-40],[2,'SW',0,-200,60],[3,'AND',2,-40,0],[4,'LED',0,120,0]],w:[[1,3,0],[2,3,1],[3,4,0]]},
+  OR:{c:[[1,'SW',0,-200,-40],[2,'SW',0,-200,60],[3,'OR',2,-40,0],[4,'LED',0,120,0]],w:[[1,3,0],[2,3,1],[3,4,0]]},
+  NOT:{c:[[1,'SW',0,-160,0],[2,'NOT',1,-40,0],[3,'LED',0,100,0]],w:[[1,2,0],[2,3,0]]},
+  NAND:{c:[[1,'SW',0,-200,-40],[2,'SW',0,-200,60],[3,'NAND',2,-40,0],[4,'LED',0,120,0]],w:[[1,3,0],[2,3,1],[3,4,0]]},
+  NOR:{c:[[1,'SW',0,-200,-40],[2,'SW',0,-200,60],[3,'NOR',2,-40,0],[4,'LED',0,120,0]],w:[[1,3,0],[2,3,1],[3,4,0]]},
+  XOR:{c:[[1,'SW',0,-200,-40],[2,'SW',0,-200,60],[3,'XOR',2,-40,0],[4,'LED',0,120,0]],w:[[1,3,0],[2,3,1],[3,4,0]]},
+  XNOR:{c:[[1,'SW',0,-200,-40],[2,'SW',0,-200,60],[3,'XNOR',2,-40,0],[4,'LED',0,120,0]],w:[[1,3,0],[2,3,1],[3,4,0]]},
+  DM1:{c:[[1,'SW',0,-240,-60],[2,'SW',0,-240,60],[3,'NOT',1,-120,-80],[4,'NOT',1,-120,80],[5,'OR',2,20,-40],[6,'NAND',2,20,80],[7,'LED',0,160,80],[8,'LED',0,160,-40]],w:[[1,3,0],[2,4,0],[3,5,0],[4,5,1],[1,6,0],[2,6,1],[6,7,0],[5,8,0]]},
+  DM2:{c:[[1,'SW',0,-240,-60],[2,'SW',0,-240,60],[3,'NOT',1,-120,-80],[4,'NOT',1,-120,80],[5,'AND',2,20,-40],[6,'NOR',2,20,80],[7,'LED',0,160,80],[8,'LED',0,160,-40]],w:[[1,3,0],[2,4,0],[3,5,0],[4,5,1],[1,6,0],[2,6,1],[6,7,0],[5,8,0]]}
+};
+const loadPreset=k=>Circuit.from({comps:PRESETS[k].c.map(([id,type,n,x,y])=>({id,type,n:n||2,x,y,rot:0,val:0,d:+$('delay').value})),wires:PRESETS[k].w.map(([a,b,bi])=>({a,b,bi}))});
+const serial=()=>JSON.stringify(C);
+const loadState=s=>{C=Circuit.from(JSON.parse(s));sel.clear();selW=null};
+const CMD=new CommandStack();
+let C=new Circuit(), sim={val:{},at:{},cyc:new Set(),disc:new Set(),crit:0};
+const sel=new Set(), expected={};
+let multi=false,drag=null,spaceDown=false,selW=null,note='',view={x:0,y:0,k:1},exprText='';
+const snap=v=>Math.round(v/20)*20;
+function changed(){note='';bus.emit('change')}
+function edit(fn){CMD.exec(serial());fn();changed()}
+
+/* ===== 10. RENDERING (SVG) ===== */
+const svg=$('canvas');
+function pinOf(c,key){const p=c.pins();return(key==='o'?p.out:p.ins[+key.slice(1)])||null}
+function render(){
+  const W=C.wires.map(w=>{const A=C.byId(w.a),B=C.byId(w.b),pa=A&&pinOf(A,'o'),pb=B&&pinOf(B,'i'+w.bi);
+    if(!pa||!pb)return'';
+    const p1=pa.pos,p2=pb.pos,m=(p1.x+p2.x)/2,d=`M${p1.x},${p1.y}H${m}V${p2.y}H${p2.x}`;
+    const col=(sim.cyc.has(w.a)||sim.cyc.has(w.b))?'var(--err)':sim.val[w.a]?'var(--hi)':'var(--lo)';
+    return `<path class="whit" data-wk="${w.key}" d="${d}"/><path class="wire${selW===w.key?' selw':''}" d="${d}" style="stroke:${col}"/>`;}).join('');
+  const comps=C.comps.map(c=>{const g=c.geom(),p=c.pins();
+    const cls=`comp${sel.has(c.id)?' sel':''}${sim.cyc.has(c.id)?' warn':''}`;
+    let body;
+    if(c.type==='SW')body=`<path d="M20,0H28"/><rect x="-20" y="-12" width="40" height="24" rx="4" style="fill:${c.val?'var(--hi)':'var(--panel)'}"/><text x="0" y="5" text-anchor="middle">${c.val}</text>`;
+    else if(c.type==='LED')body=`<path d="M-28,0H-12"/><circle r="12" style="fill:${sim.val[c.id]?'var(--led)':'var(--grid)'};filter:${sim.val[c.id]?'drop-shadow(0 0 6px var(--led))':'none'}"/><text x="0" y="4" text-anchor="middle" style="font-size:9px">${sim.val[c.id]?1:0}</text>`;
+    else body=symSVG(c.type,c.n);
+    const pins=[...p.ins,p.out].filter(Boolean).map(q=>`<circle class="hitp" data-c="${c.id}" data-p="${q.key}" cx="${q.x}" cy="${q.y}" r="14"/><circle class="pin" data-c="${c.id}" data-p="${q.key}" cx="${q.x}" cy="${q.y}" r="5"/>`).join('');
+    return `<g class="${cls}" data-c="${c.id}" transform="translate(${c.x},${c.y}) rotate(${c.rot*90})"><rect class="hit" x="-44" y="${-g.H/2-14}" width="88" height="${g.H+28}"/>${body}${pins}<text x="0" y="${-g.H/2-12}" text-anchor="middle">${c.label}</text></g>`;}).join('');
+  let tmp='';
+  if(drag&&drag.type==='wire'&&drag.cur)tmp=`<path class="wire" style="stroke:var(--accent);stroke-dasharray:5 4;pointer-events:none" d="M${drag.from.x},${drag.from.y}H${(drag.from.x+drag.cur.x)/2}V${drag.cur.y}H${drag.cur.x}"/>`;
+  if(drag&&drag.type==='box'){const b=drag.cur||drag.start;tmp+=`<rect class="box" x="${Math.min(drag.start.x,b.x)}" y="${Math.min(drag.start.y,b.y)}" width="${Math.abs(b.x-drag.start.x)}" height="${Math.abs(b.y-drag.start.y)}"/>`;}
+  svg.innerHTML=`<g transform="translate(${view.x},${view.y}) scale(${view.k})">${W}${comps}${tmp}</g>`;
+}
+
+/* ===== 11. PANELS (expression, truth table, info, status) ===== */
+function renderExpr(){const E=new ExpressionBuilder(C),outs=C.comps.filter(c=>c.type==='LED').sort((a,b)=>a.id-b.id);
+  exprText=outs.map((o,i)=>`Y${i+1} = ${E.of(o.id).s}`).join('\n');
+  $('expr').innerHTML=(outs.length?outs.map((o,i)=>`<div class="expr"><b>Y${i+1}</b> = ${E.of(o.id).s}</div>`).join(''):'<p class="muted">Add output LEDs to see expressions.</p>')+'<button id="copy">Copy</button>';}
+function renderTT(){const el=$('tt'),T=new TruthTable(C),nm=new ExpressionBuilder(C).names;
+  if(T.ins.length>4){el.innerHTML=`<p>This circuit has ${T.ins.length} inputs; the truth table supports up to 4.</p>`;return}
+  if(!T.ins.length||!T.outs.length){el.innerHTML='<p class="muted">Add input switches and output LEDs to generate a table.</p>';return}
+  const rows=T.rows(),cur=T.ins.map(c=>c.val);
+  let h='<table><tr>'+T.ins.map(c=>`<th>${nm[c.id]}</th>`).join('')+T.outs.map((o,i)=>`<th>Y${i+1}</th>`).join('')+'</tr>';
+  h+=`<tr><td colspan="${T.ins.length}">Expected</td>`+T.outs.map(o=>`<td><input data-exp="${o.id}" value="${expected[o.id]||''}" placeholder="${'0'.repeat(rows.length)}"></td>`).join('')+'</tr>';
+  rows.forEach((r,ri)=>{const isCur=r.bits.every((b,k)=>b===cur[k]);
+    const bad=T.outs.some((o,k)=>expected[o.id]&&expected[o.id][ri]!==undefined&&expected[o.id][ri]!==String(r.outs[k]));
+    h+=`<tr data-r="${ri}" class="${isCur?'cur':''}${bad?' bad':''}"><td>${r.bits.join('</td><td>')}</td><td>${r.outs.join('</td><td>')}</td></tr>`;});
+  el.innerHTML=h+'</table><p><button id="csv">Export CSV</button></p>';}
+function renderInfo(){const el=$('info'),c=sel.size===1?C.byId([...sel][0]):null;
+  if(!c||!['AND','OR','NAND','NOR','XOR','XNOR','NOT'].includes(c.type)){el.innerHTML='<p class="muted">Select a gate to see its symbol, truth table and equation.</p>';return}
+  const n=c.nIn,L=Array.from({length:n},(_,i)=>String.fromCharCode(65+i)),sep={AND:'·',NAND:'·',OR:' + ',NOR:' + ',XOR:' ⊕ ',XNOR:' ⊕ ',NOT:''}[c.type];
+  const eq=c.type==='NOT'?"Y = A'":INV(c.type)?`Y = (${L.join(sep)})'`:`Y = ${L.join(sep)}`;
+  let rows='';for(let r=0;r<(1<<n);r++){const bits=L.map((_,k)=>(r>>(n-1-k))&1);rows+=`<tr><td>${bits.join('</td><td>')}</td><td>${gateFn(c.type,bits)}</td></tr>`}
+  el.innerHTML=`<svg class="comp" viewBox="-60 -40 120 80" width="180" style="display:block;margin:auto">${symSVG(c.type,c.n)}</svg><div class="expr">${eq}</div><table><tr>${L.map(l=>`<th>${l}</th>`).join('')}<th>Y</th></tr>${rows}</table>`;}
+function renderStatus(){const n=C.comps.length;
+  const parts=[n?`Simulation: ${sim.cyc.size?'UNSTABLE (loop)':'stable'}`:'Empty circuit'];
+  if(n)parts.push(`Critical path ${sim.crit.toFixed(1)} ns`);
+  if(note)parts.push(note);
+  $('status').textContent=parts.join(' · ');
+  $('warn').textContent=sim.cyc.size?`⚠ Feedback loop: ${sim.cyc.size} component(s) flagged`:(sim.disc.size?`⚠ ${sim.disc.size} component(s) with disconnected inputs`:'');
+  $('mDel').textContent=`🗑 Delete (${sel.size+(selW?1:0)})`;$('mSel').classList.toggle('on',multi);
+  $('counts').textContent=`${n} components · ${C.wires.length} wires`;}
+
+/* ===== 12. CANVAS INTERACTION (select, move, wire, rubber band, pan, zoom) ===== */
+const loc=e=>{const r=svg.getBoundingClientRect();return{sx:e.clientX-r.left,sy:e.clientY-r.top}};
+const toW=e=>{const{sx,sy}=loc(e);return{x:(sx-view.x)/view.k,y:(sy-view.y)/view.k}};
+function zoomAt(sx,sy,f){const wx=(sx-view.x)/view.k,wy=(sy-view.y)/view.k;view.k=Math.min(3,Math.max(.25,view.k*f));view.x=sx-wx*view.k;view.y=sy-wy*view.k;render()}
+function fit(){if(!C.comps.length){view={x:svg.clientWidth/2,y:svg.clientHeight/2,k:1};render();return}
+  const xs=C.comps.map(c=>c.x),ys=C.comps.map(c=>c.y),x0=Math.min(...xs)-80,x1=Math.max(...xs)+80,y0=Math.min(...ys)-60,y1=Math.max(...ys)+60;
+  view.k=Math.min(2,svg.clientWidth/(x1-x0),svg.clientHeight/(y1-y0));
+  view.x=svg.clientWidth/2-(x0+x1)/2*view.k;view.y=svg.clientHeight/2-(y0+y1)/2*view.k;render();}
+function connect(d,t){const fromOut=d.key==='o',toOut=t.key==='o';
+  if(fromOut===toOut){note='✗ Invalid: output→output or input→input';renderStatus();return}
+  const src=fromOut?d.id:t.id,dst=fromOut?t.id:d.id,bi=+(fromOut?t.key:d.key).slice(1),dc=C.byId(dst);
+  if(!dc||bi>=dc.nIn){note='✗ No such input pin';renderStatus();return}
+  if(C.wires.some(w=>w.b===dst&&w.bi===bi)){note='✗ Input pin already has a wire';renderStatus();return}
+  edit(()=>C.wires.push(new Wire(src,dst,bi)));}
+svg.addEventListener('pointerdown',e=>{svg.setPointerCapture(e.pointerId);
+  const p=toW(e),L=loc(e),pe=e.target.closest('[data-p]'),ce=e.target.closest('[data-c]'),we=e.target.closest('[data-wk]');
+  if(e.button===1||spaceDown){e.preventDefault();drag={type:'pan',sx:L.sx,sy:L.sy,ox:view.x,oy:view.y};return}
+  if(pe){const c=C.byId(+pe.dataset.c),k=pe.dataset.p;drag={type:'wire',id:c.id,key:k,from:pinOf(c,k).pos,cur:p};render();return}
+  if(ce){const id=+ce.dataset.c;selW=null;
+    if(e.shiftKey||multi){sel.has(id)?sel.delete(id):sel.add(id)}else if(!sel.has(id)){sel.clear();sel.add(id)}
+    drag={type:'move',start:p,pre:serial(),moved:false,click:id,orig:Object.fromEntries([...sel].map(i=>{const c=C.byId(i);return[i,{x:c.x,y:c.y}]}))};
+    render();return}
+  if(we){selW=we.dataset.wk;sel.clear();drag=null;render();return}
+  if(!multi){sel.clear();selW=null}drag={type:'box',start:p,cur:p};render();});
+svg.addEventListener('pointermove',e=>{if(!drag)return;const L=loc(e),p=toW(e);
+  if(drag.type==='pan'){view.x=drag.ox+L.sx-drag.sx;view.y=drag.oy+L.sy-drag.sy}
+  else if(drag.type==='move'){const dx=p.x-drag.start.x,dy=p.y-drag.start.y;if(Math.hypot(dx,dy)>3)drag.moved=true;
+    for(const id in drag.orig){const c=C.byId(+id),o=drag.orig[id];c.x=snap(o.x+dx);c.y=snap(o.y+dy)}}
+  else drag.cur=p;
+  render();});
+svg.addEventListener('pointerup',e=>{if(!drag)return;const d=drag;drag=null;
+  if(d.type==='move'){if(d.moved){CMD.exec(d.pre);changed()}
+    else{const c=C.byId(d.click);if(c&&c.type==='SW'&&!multi){c.val^=1;changed()}else render()}}
+  else if(d.type==='wire'){const t=document.elementFromPoint(e.clientX,e.clientY)?.closest('[data-p]');if(t)connect(d,{id:+t.dataset.c,key:t.dataset.p});render()}
+  else if(d.type==='box'){const b=d.cur||d.start,x0=Math.min(d.start.x,b.x),x1=Math.max(d.start.x,b.x),y0=Math.min(d.start.y,b.y),y1=Math.max(d.start.y,b.y);
+    C.comps.forEach(c=>{if(c.x>=x0&&c.x<=x1&&c.y>=y0&&c.y<=y1)sel.add(c.id)});render()}
+  else render();});
+svg.addEventListener('wheel',e=>{e.preventDefault();const L=loc(e);zoomAt(L.sx,L.sy,e.deltaY<0?1.1:1/1.1)},{passive:false});
+
+/* ===== 13. EDITS (add, rotate, delete) & KEYBOARD ===== */
+function addAt(type,n){const g=new Gate({id:C.newId(),type,n,d:+$('delay').value});
+  g.x=snap((svg.clientWidth/2-view.x)/view.k);g.y=snap((svg.clientHeight/2-view.y)/view.k);
+  edit(()=>C.comps.push(g));sel.clear();sel.add(g.id);$('left').classList.remove('open');}
+function rotateSel(){if(sel.size)edit(()=>sel.forEach(id=>{const c=C.byId(id);c.rot=(c.rot+1)%4}))}
+function deleteSel(){if(!sel.size&&!selW)return;
+  edit(()=>{C.comps=C.comps.filter(c=>!sel.has(c.id));C.wires=C.wires.filter(w=>!sel.has(w.a)&&!sel.has(w.b)&&w.key!==selW);sel.clear();selW=null});}
+function undo(){const s=CMD.undo();if(s!==null){loadState(s);changed()}}
+function redo(){const s=CMD.redo();if(s!==null){loadState(s);changed()}}
+addEventListener('keydown',e=>{if(['INPUT','SELECT'].includes(e.target.tagName))return;
+  const k=e.key.toLowerCase(),mod=e.ctrlKey||e.metaKey;
+  if(e.code==='Space'){spaceDown=true;e.preventDefault()}
+  else if(k==='delete'||k==='backspace'){e.preventDefault();deleteSel()}
+  else if(k==='r'&&!mod){rotateSel()}
+  else if(mod&&k==='z'){e.preventDefault();undo()}
+  else if(mod&&k==='y'){e.preventDefault();redo()}
+  else if(k==='+'||k==='='){zoomAt(svg.clientWidth/2,svg.clientHeight/2,1.2)}
+  else if(k==='-'){zoomAt(svg.clientWidth/2,svg.clientHeight/2,1/1.2)}});
+addEventListener('keyup',e=>{if(e.code==='Space')spaceDown=false});
+
+/* ===== 14. UI WIRING & INIT ===== */
+bus.on('change',()=>{sim=new Simulator().run(C);bus.emit('sim')});
+bus.on('sim',()=>{render();renderExpr();renderTT();renderInfo();renderStatus()});
+function download(name,type,text){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([text],{type}));a.download=name;a.click()}
+(function init(){
+  try{document.documentElement.dataset.theme=localStorage.getItem('dlc.theme')||'dark'}catch(e){}
+  $('gates').innerHTML=[...['AND','OR','NAND','NOR','XOR','XNOR'].flatMap(t=>[2,3,4].map(n=>[t,n])),['NOT',1]]
+    .map(([t,n])=>`<button class="pal" data-add="${t}" data-n="${n}"><svg class="comp" viewBox="-44 -26 92 52">${symSVG(t,n)}</svg>${t==='NOT'?'NOT':t+n}</button>`).join('');
+  $('io').innerHTML=`<button class="pal" data-add="SW"><svg class="comp" viewBox="-30 -18 60 36"><rect x="-20" y="-12" width="40" height="24" rx="4"/><path d="M20,0H28"/></svg>Switch</button>`
+    +`<button class="pal" data-add="LED"><svg class="comp" viewBox="-30 -18 60 36"><path d="M-28,0H-12"/><circle r="12"/></svg>LED</button>`;
+  document.addEventListener('click',e=>{const b=e.target.closest('[data-add]');if(b)addAt(b.dataset.add,+b.dataset.n||2)});
+  $('preset').onchange=e=>{if(e.target.value)edit(()=>loadState(JSON.stringify(loadPreset(e.target.value))));e.target.value=''};
+  $('undo').onclick=undo;$('redo').onclick=redo;
+  $('zin').onclick=()=>zoomAt(svg.clientWidth/2,svg.clientHeight/2,1.2);
+  $('zout').onclick=()=>zoomAt(svg.clientWidth/2,svg.clientHeight/2,1/1.2);
+  $('fit').onclick=fit;
+  $('delBtn').onclick=deleteSel;$('mDel').onclick=deleteSel;
+  $('mSel').onclick=()=>{multi=!multi;renderStatus()};
+  $('mGates').onclick=()=>{$('right').classList.remove('open');$('left').classList.toggle('open')};
+  $('mPanel').onclick=()=>{$('left').classList.remove('open');$('right').classList.toggle('open')};
+  $('delay').oninput=()=>{$('dv').textContent=$('delay').value+' ns';C.comps.forEach(c=>{if(c.type!=='SW'&&c.type!=='LED')c.d=+$('delay').value});changed()};
+  $('theme').onclick=()=>{const t=document.documentElement.dataset.theme==='dark'?'light':'dark';document.documentElement.dataset.theme=t;try{localStorage.setItem('dlc.theme',t)}catch(e){}};
+  $('save').onclick=()=>{const n=prompt('Save name:');if(!n)return;const s=JSON.parse(localStorage.getItem('dlc.saves')||'{}');s[n]=JSON.parse(serial());localStorage.setItem('dlc.saves',JSON.stringify(s));note=`Saved "${n}"`;renderStatus()};
+  $('load').onclick=()=>{const s=JSON.parse(localStorage.getItem('dlc.saves')||'{}'),names=Object.keys(s);
+    if(!names.length){note='No saves yet';renderStatus();return}
+    const n=prompt('Load which save?\n'+names.join('\n'),names[0]);if(s[n])edit(()=>loadState(JSON.stringify(s[n])))};
+  $('exp').onclick=()=>download('circuit.json','application/json',serial());
+  $('imp').onclick=()=>$('file').click();
+  $('file').onchange=async e=>{const f=e.target.files[0];if(!f)return;try{const t=await f.text();JSON.parse(t);edit(()=>loadState(t))}catch(err){note='✗ Invalid JSON file';renderStatus()}};
+  document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>{document.querySelectorAll('.tabs button').forEach(x=>x.classList.toggle('on',x===b));['expr','tt','info'].forEach(id=>$(id).hidden=id!==b.dataset.tab)});
+  $('expr').addEventListener('click',e=>{if(e.target.id==='copy'){navigator.clipboard?.writeText(exprText);note='Expression copied';renderStatus()}});
+  $('tt').addEventListener('change',e=>{if(e.target.dataset.exp){expected[e.target.dataset.exp]=e.target.value.replace(/[^01]/g,'');renderTT()}});
+  $('tt').addEventListener('click',e=>{
+    if(e.target.id==='csv'){const T=new TruthTable(C),nm=new ExpressionBuilder(C).names,rows=T.rows();
+      const lines=[[...T.ins.map(c=>nm[c.id]),...T.outs.map((_,i)=>'Y'+(i+1))].join(','),...rows.map(r=>[...r.bits,...r.outs].join(','))];
+      download('truth_table.csv','text/csv',lines.join('\n'));return}
+    const tr=e.target.closest('tr[data-r]');
+    if(tr){const T=new TruthTable(C),r=+tr.dataset.r,n=T.ins.length;T.ins.forEach((c,k)=>c.val=(r>>(n-1-k))&1);changed()}});
+  C=loadPreset('HA');sel.clear();changed();fit();
+  runTests();
+})();
+
+/* ===== 15. UNIT TESTS (console) =====
+   Each gate is checked against an independent reference over all input rows (built as a circuit),
+   then the presets are checked. Run with: open DevTools console and read "Passed x/y". */
+function runTests(){
+  const res=[],check=(name,fn)=>{let ok=false;try{ok=!!fn()}catch(e){ok=false}res.push([name,ok])};
+  const REF={AND:b=>b.every(x=>x)?1:0,OR:b=>b.some(x=>x)?1:0,XOR:b=>b.reduce((a,x)=>a^x,0)};
+  REF.NAND=b=>1-REF.AND(b);REF.NOR=b=>1-REF.OR(b);REF.XNOR=b=>1-REF.XOR(b);REF.NOT=b=>1-b[0];
+  const gateCircuit=(t,n)=>{const k=t==='NOT'?1:n,D=new Circuit();
+    for(let i=1;i<=k;i++)D.comps.push(new Gate({id:i,type:'SW'}));
+    D.comps.push(new Gate({id:k+1,type:t,n:k}));D.comps.push(new Gate({id:k+2,type:'LED'}));
+    for(let i=1;i<=k;i++)D.wires.push(new Wire(i,k+1,i-1));D.wires.push(new Wire(k+1,k+2,0));return D};
+  const matches=(D,fn)=>new TruthTable(D).rows().every(r=>r.outs[0]===fn(r.bits));
+  ['AND','OR','NAND','NOR','XOR','XNOR'].forEach(t=>check(`${t}2 truth table`,()=>matches(gateCircuit(t,2),REF[t])));
+  check('NOT truth table',()=>matches(gateCircuit('NOT',1),REF.NOT));
+  ['AND','OR','NAND','NOR','XOR','XNOR'].forEach(t=>[3,4].forEach(n=>check(`${t}${n} truth table`,()=>matches(gateCircuit(t,n),REF[t]))));
+  check('Half adder',()=>new TruthTable(loadPreset('HA')).rows().every(r=>r.outs[0]===(r.bits[0]^r.bits[1])&&r.outs[1]===(r.bits[0]&r.bits[1])));
+  check('Full adder',()=>new TruthTable(loadPreset('FA')).rows().every(r=>{const[a,b,c]=r.bits;return r.outs[0]===(a^b^c)&&r.outs[1]===((a&b)|(c&(a^b)))}));
+  check('XOR from NAND',()=>new TruthTable(loadPreset('XNAND')).rows().every(r=>r.outs[0]===(r.bits[0]^r.bits[1])));
+  check('NOT from NAND',()=>new TruthTable(loadPreset('NOTNAND')).rows().every(r=>r.outs[0]===1-r.bits[0]));
+  const P=k=>new TruthTable(loadPreset(k)).rows();
+  check('Preset AND',()=>P('AND').every(r=>r.outs[0]===(r.bits[0]&r.bits[1])));
+  check('Preset OR',()=>P('OR').every(r=>r.outs[0]===(r.bits[0]|r.bits[1])));
+  check('Preset NOT',()=>P('NOT').every(r=>r.outs[0]===1-r.bits[0]));
+  check('Preset NAND',()=>P('NAND').every(r=>r.outs[0]===1-(r.bits[0]&r.bits[1])));
+  check('Preset NOR',()=>P('NOR').every(r=>r.outs[0]===1-(r.bits[0]|r.bits[1])));
+  check('Preset XOR',()=>P('XOR').every(r=>r.outs[0]===(r.bits[0]^r.bits[1])));
+  check('Preset XNOR',()=>P('XNOR').every(r=>r.outs[0]===1-(r.bits[0]^r.bits[1])));
+  check('De Morgan 1st',()=>P('DM1').every(r=>{const[a,b]=r.bits;return r.outs[0]===1-(a&b)&&r.outs[1]===((1-a)|(1-b))}));
+  check('De Morgan 2nd',()=>P('DM2').every(r=>{const[a,b]=r.bits;return r.outs[0]===1-(a|b)&&r.outs[1]===((1-a)&(1-b))}));
+  const pass=res.filter(r=>r[1]).length;
+  res.filter(r=>!r[1]).forEach(r=>console.error('FAIL:',r[0]));
+  console.log(`%cPassed ${pass}/${res.length}`,'font-weight:bold;font-size:14px');
+  return{pass,total:res.length};
+}
+</script>
+</body>
+</html>
